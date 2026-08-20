@@ -1,10 +1,14 @@
 /* ===================== Shared engine for Cash Book / Bank Book ===================== */
+
+/* ============================================================================
+   SUPABASE CONFIG — paste your two values from Supabase (Project Settings → API)
+   ============================================================================ */
+const SUPABASE_URL = 'https://xfvltefvqznwvnudsfcn.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_8gUNWnuSSKkwpcedqxmwhA_7zuug-9p';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const BOOKS = {
   cash: {
-    key: 'potafo_cashbook',
-    ledgerKey: 'potafo_cash_ledgers',
-    counterKey: 'potafo_cash_vouchercounters',
-    openingBalKey: 'potafo_cash_openingbalances',
     voucherPrefix: 'CV',
     title: 'Cash Book',
     sub: 'Track cash receipts and payments across cash locations.',
@@ -12,10 +16,6 @@ const BOOKS = {
     defaultLedgers: ['Main Cash']
   },
   bank: {
-    key: 'potafo_bankbook',
-    ledgerKey: 'potafo_bank_ledgers',
-    counterKey: 'potafo_bank_vouchercounters',
-    openingBalKey: 'potafo_bank_openingbalances',
     voucherPrefix: 'BV',
     title: 'Bank Book',
     sub: 'Track bank receipts and payments across bank accounts.',
@@ -24,24 +24,56 @@ const BOOKS = {
   }
 };
 
-function loadJSON(key, fallback){
-  try{
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : fallback;
-  }catch(e){ return fallback; }
+/* ===================== Supabase helpers ===================== */
+/* Every one of these talks to the database. If something goes wrong (no internet,
+   wrong keys, etc.) it shows a simple alert instead of silently failing. */
+async function fetchLedgers(book){
+  const { data, error } = await sb.from('ledgers').select('*').eq('book', book).order('created_at', { ascending: true });
+  if(error){ alert('Could not load ' + book + ' ledgers: ' + error.message); return []; }
+  return data || [];
 }
-function saveJSON(key, val){
-  localStorage.setItem(key, JSON.stringify(val));
+async function insertLedgerRow(book, name){
+  const { data, error } = await sb.from('ledgers').insert({ book, name }).select().single();
+  if(error){ alert('Could not create ledger: ' + error.message); return null; }
+  return data;
 }
+async function updateLedgerRow(id, fields){
+  const { error } = await sb.from('ledgers').update(fields).eq('id', id);
+  if(error){ alert('Could not update ledger: ' + error.message); return false; }
+  return true;
+}
+async function deleteLedgerRow(id){
+  const { error } = await sb.from('ledgers').delete().eq('id', id);
+  if(error){ alert('Could not delete ledger: ' + error.message); return false; }
+  return true;
+}
+async function fetchEntries(book){
+  const { data, error } = await sb.from('entries').select('*').eq('book', book);
+  if(error){ alert('Could not load ' + book + ' entries: ' + error.message); return []; }
+  return data || [];
+}
+async function insertEntryRow(row){
+  const { data, error } = await sb.from('entries').insert(row).select().single();
+  if(error){ alert('Could not save entry: ' + error.message); return null; }
+  return data;
+}
+async function updateEntryRow(id, fields){
+  const { error } = await sb.from('entries').update(fields).eq('id', id);
+  if(error){ alert('Could not update entry: ' + error.message); return false; }
+  return true;
+}
+async function deleteEntryRow(id){
+  const { error } = await sb.from('entries').delete().eq('id', id);
+  if(error){ alert('Could not delete entry: ' + error.message); return false; }
+  return true;
+}
+
 function fmt(n){
   const v = Number(n)||0;
   return v.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function todayStr(){
   return new Date().toISOString().slice(0,10);
-}
-function uid(){
-  return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 }
 function pad4(n){
   return String(n).padStart(4,'0');
@@ -113,30 +145,42 @@ function setupParticularsAutocomplete(state, inputEl, listEl){
   });
 }
 
-function initBook(type){
+/* ===================== Init (now loads from Supabase) ===================== */
+async function initBook(type){
   const cfg = BOOKS[type];
-  let ledgers = loadJSON(cfg.ledgerKey, null);
-  if(!ledgers || !ledgers.length){
-    ledgers = cfg.defaultLedgers.slice();
-    saveJSON(cfg.ledgerKey, ledgers);
+
+  let ledgerRows = await fetchLedgers(type);
+  if(!ledgerRows.length){
+    const created = await insertLedgerRow(type, cfg.defaultLedgers[0]);
+    if(created) ledgerRows = [created];
   }
-  let entries = loadJSON(cfg.key, null);
-  if(!entries){
-    entries = [];
-    saveJSON(cfg.key, entries);
-  }
-  let counters = loadJSON(cfg.counterKey, null);
-  if(!counters){
-    counters = {};
-    saveJSON(cfg.counterKey, counters);
-  }
-  let openingBalances = loadJSON(cfg.openingBalKey, null);
-  if(!openingBalances){
-    openingBalances = {};
-    saveJSON(cfg.openingBalKey, openingBalances);
-  }
+
+  const ledgers = [];        // array of ledger names, same shape as before
+  const ledgerIds = {};      // name -> database id (new: needed to talk to Supabase)
+  const counters = {};       // name -> voucher counter
+  const openingBalances = {};// name -> opening balance
+  const idToName = {};
+  ledgerRows.forEach(r => {
+    ledgers.push(r.name);
+    ledgerIds[r.name] = r.id;
+    counters[r.name] = r.voucher_counter || 0;
+    openingBalances[r.name] = Number(r.opening_balance) || 0;
+    idToName[r.id] = r.name;
+  });
+
+  const entryRows = await fetchEntries(type);
+  const entries = entryRows.map(r => ({
+    id: r.id,
+    ledger: idToName[r.ledger_id] || '(deleted ledger)',
+    date: r.entry_date,
+    txType: r.tx_type,
+    particulars: r.particulars,
+    ref: r.ref,
+    amount: Number(r.amount)
+  }));
+
   const state = {
-    type, cfg, ledgers, entries, counters, openingBalances,
+    type, cfg, ledgers, ledgerIds, entries, counters, openingBalances,
     activeLedger: ledgers[0],
     txType: 'Income', // Income = money in, Expense = money out
     autoVoucher: true,
@@ -351,7 +395,7 @@ function renderModule(state){
     btnExpense.classList.add('on-expense'); btnIncome.classList.remove('on-income');
   });
 
-  // wire auto voucher toggle (kebab menu item)
+  // wire auto voucher toggle (kebab menu item) — this stays a local/browser setting, not stored in the database
   const refEl = document.getElementById(state.type + '-ref');
   const autoToggleBtn = document.getElementById(state.type + '-autoVoucherToggleBtn');
   const autoStatusEl = document.getElementById(state.type + '-autoVoucherStatus');
@@ -419,11 +463,15 @@ function refreshLedgerOptions(state, selectEl){
   ).join('');
 }
 
-function addEntry(state){
+/* Adding an entry now writes to Supabase first (await), then updates the
+   screen once the database confirms it saved. A brief "Saving..." label
+   shows on the button so it's clear something is happening. */
+async function addEntry(state){
   const dateEl = document.getElementById(state.type + '-date');
   const particularsEl = document.getElementById(state.type + '-particulars');
   const refEl = document.getElementById(state.type + '-ref');
   const amountEl = document.getElementById(state.type + '-amount');
+  const addBtn = document.getElementById(state.type + '-addBtn');
 
   const date = dateEl.value || todayStr();
   const particulars = particularsEl.value.trim();
@@ -433,32 +481,57 @@ function addEntry(state){
   if(!particulars){ alert('Enter particulars.'); particularsEl.focus(); return; }
   if(!amount || amount <= 0){ alert('Enter a valid amount.'); amountEl.focus(); return; }
 
+  let newCounterVal = null;
   if(state.autoVoucher){
     ref = nextVoucherNo(state);
-    state.counters[state.activeLedger] = (state.counters[state.activeLedger] || 0) + 1;
-    saveJSON(state.cfg.counterKey, state.counters);
+    newCounterVal = (state.counters[state.activeLedger] || 0) + 1;
   } else {
     if(!ref){ alert('Enter a voucher no., or switch Auto back on.'); refEl.focus(); return; }
     const dup = state.entries.some(e => e.ledger === state.activeLedger && e.ref === ref);
     if(dup && !confirm(`Voucher no. "${ref}" already exists in this ledger. Use it anyway?`)) return;
   }
 
-  const entry = {
-    id: uid(),
+  addBtn.disabled = true;
+  addBtn.textContent = 'Saving...';
+
+  const ledgerId = state.ledgerIds[state.activeLedger];
+  const inserted = await insertEntryRow({
+    book: state.type,
+    ledger_id: ledgerId,
+    entry_date: date,
+    particulars,
+    ref,
+    tx_type: state.txType,
+    amount
+  });
+
+  if(!inserted){
+    addBtn.disabled = false;
+    addBtn.textContent = 'Add Entry';
+    return; // insertEntryRow already alerted the error
+  }
+
+  if(state.autoVoucher){
+    state.counters[state.activeLedger] = newCounterVal;
+    await updateLedgerRow(ledgerId, { voucher_counter: newCounterVal });
+  }
+
+  state.entries.push({
+    id: inserted.id,
     ledger: state.activeLedger,
     date,
     txType: state.txType, // 'Income' = money in, 'Expense' = money out
     particulars,
     ref,
     amount
-  };
-  state.entries.push(entry);
-  saveJSON(state.cfg.key, state.entries);
+  });
 
   particularsEl.value = '';
   amountEl.value = '';
   particularsEl.focus();
   updateVoucherField(state);
+  addBtn.disabled = false;
+  addBtn.textContent = 'Add Entry';
 
   renderTable(state);
 }
@@ -483,9 +556,10 @@ function deleteEntry(state, id){
   document.getElementById('dvModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'dvModalOverlay') closeModal();
   });
-  document.getElementById('dv-confirm').addEventListener('click', ()=>{
+  document.getElementById('dv-confirm').addEventListener('click', async ()=>{
+    const ok = await deleteEntryRow(id);
+    if(!ok) return;
     state.entries = state.entries.filter(e => e.id !== id);
-    saveJSON(state.cfg.key, state.entries);
     closeModal();
     renderTable(state);
   });
@@ -538,12 +612,16 @@ function openAddLedgerModal(state, ledgerSelect){
   document.getElementById('alModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'alModalOverlay') closeModal();
   });
-  function submit(){
+  async function submit(){
     const trimmed = nameEl.value.trim();
     if(!trimmed){ nameEl.focus(); return; }
     if(state.ledgers.includes(trimmed)){ alert('That ledger already exists.'); return; }
+    const created = await insertLedgerRow(state.type, trimmed);
+    if(!created) return;
     state.ledgers.push(trimmed);
-    saveJSON(cfg.ledgerKey, state.ledgers);
+    state.ledgerIds[trimmed] = created.id;
+    state.counters[trimmed] = 0;
+    state.openingBalances[trimmed] = 0;
     state.activeLedger = trimmed;
     refreshLedgerOptions(state, ledgerSelect);
     updateVoucherField(state);
@@ -582,24 +660,18 @@ function openEditLedgerModal(state, ledgerSelect){
   document.getElementById('elModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'elModalOverlay') closeModal();
   });
-  function submit(){
+  async function submit(){
     const trimmed = nameEl.value.trim();
     if(!trimmed || trimmed === oldName){ closeModal(); return; }
     if(state.ledgers.includes(trimmed)){ alert('A ledger with that name already exists.'); return; }
+    const id = state.ledgerIds[oldName];
+    const ok = await updateLedgerRow(id, { name: trimmed });
+    if(!ok) return;
     state.ledgers = state.ledgers.map(l => l === oldName ? trimmed : l);
-    saveJSON(cfg.ledgerKey, state.ledgers);
     state.entries.forEach(e => { if(e.ledger === oldName) e.ledger = trimmed; });
-    saveJSON(cfg.key, state.entries);
-    if(state.counters[oldName] !== undefined){
-      state.counters[trimmed] = state.counters[oldName];
-      delete state.counters[oldName];
-      saveJSON(cfg.counterKey, state.counters);
-    }
-    if(state.openingBalances[oldName] !== undefined){
-      state.openingBalances[trimmed] = state.openingBalances[oldName];
-      delete state.openingBalances[oldName];
-      saveJSON(cfg.openingBalKey, state.openingBalances);
-    }
+    state.ledgerIds[trimmed] = id; delete state.ledgerIds[oldName];
+    state.counters[trimmed] = state.counters[oldName]; delete state.counters[oldName];
+    state.openingBalances[trimmed] = state.openingBalances[oldName]; delete state.openingBalances[oldName];
     state.activeLedger = trimmed;
     refreshLedgerOptions(state, ledgerSelect);
     updateVoucherField(state);
@@ -638,10 +710,13 @@ function openOpeningBalanceModal(state, ledgerSelect){
   document.getElementById('obModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'obModalOverlay') closeModal();
   });
-  function submit(){
+  async function submit(){
     const val = parseFloat(amountEl.value);
-    state.openingBalances[state.activeLedger] = isNaN(val) ? 0 : val;
-    saveJSON(cfg.openingBalKey, state.openingBalances);
+    const final = isNaN(val) ? 0 : val;
+    const id = state.ledgerIds[state.activeLedger];
+    const ok = await updateLedgerRow(id, { opening_balance: final });
+    if(!ok) return;
+    state.openingBalances[state.activeLedger] = final;
     renderTable(state);
     closeModal();
   }
@@ -676,15 +751,17 @@ function openDeleteLedgerModal(state, ledgerSelect){
   document.getElementById('dlModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'dlModalOverlay') closeModal();
   });
-  document.getElementById('dl-confirm').addEventListener('click', ()=>{
+  document.getElementById('dl-confirm').addEventListener('click', async ()=>{
+    const id = state.ledgerIds[state.activeLedger];
+    // Deleting the ledger row also deletes all its entries automatically
+    // (the database was set up with "on delete cascade" for this).
+    const ok = await deleteLedgerRow(id);
+    if(!ok) return;
     state.entries = state.entries.filter(e => e.ledger !== state.activeLedger);
-    saveJSON(cfg.key, state.entries);
     delete state.counters[state.activeLedger];
-    saveJSON(cfg.counterKey, state.counters);
     delete state.openingBalances[state.activeLedger];
-    saveJSON(cfg.openingBalKey, state.openingBalances);
+    delete state.ledgerIds[state.activeLedger];
     state.ledgers = state.ledgers.filter(l => l !== state.activeLedger);
-    saveJSON(cfg.ledgerKey, state.ledgers);
     state.activeLedger = state.ledgers[0];
     refreshLedgerOptions(state, ledgerSelect);
     updateVoucherField(state);
@@ -754,7 +831,7 @@ function openEditEntryModal(state, id){
   document.getElementById('editModalOverlay').addEventListener('click', (ev)=>{
     if(ev.target.id === 'editModalOverlay') closeModal();
   });
-  document.getElementById('em-save').addEventListener('click', ()=>{
+  document.getElementById('em-save').addEventListener('click', async ()=>{
     const date = document.getElementById('em-date').value || entry.date;
     const txType = document.getElementById('em-type').value;
     const particulars = document.getElementById('em-particulars').value.trim();
@@ -768,12 +845,20 @@ function openEditEntryModal(state, id){
     const dup = state.entries.some(e => e.id !== id && e.ledger === entry.ledger && e.ref === ref);
     if(dup && !confirm(`Voucher no. "${ref}" is already used in this ledger. Save anyway?`)) return;
 
+    const ok = await updateEntryRow(id, {
+      entry_date: date,
+      tx_type: txType,
+      particulars,
+      ref,
+      amount
+    });
+    if(!ok) return;
+
     entry.date = date;
     entry.txType = txType;
     entry.particulars = particulars;
     entry.ref = ref;
     entry.amount = amount;
-    saveJSON(state.cfg.key, state.entries);
     closeModal();
     renderTable(state);
   });
