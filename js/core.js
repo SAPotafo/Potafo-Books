@@ -22,12 +22,11 @@
 
     money: function (n) { return moneyFmt.format(n); },
 
-    // ISO yyyy-mm-dd -> dd-Mon-yyyy
+    // ISO yyyy-mm-dd -> dd-mm-yyyy
     fmtDate: function (iso) {
       if (!iso) return '';
       var p = iso.split('-');
-      var m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+p[1] - 1];
-      return p[2] + '-' + m + '-' + p[0];
+      return p[2] + '-' + p[1] + '-' + p[0];
     },
 
     // Local date (not UTC) as yyyy-mm-dd

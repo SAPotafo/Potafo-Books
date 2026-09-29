@@ -237,6 +237,116 @@
     refresh();
   }
 
+  // One shared searchable popup for lists with very many rows (a dropdown on every row would be heavy).
+  //   Potafo.pick(anchorElement, [{ value, label }], currentValue, prefill) -> Promise of the chosen value, or null if cancelled
+  window.Potafo.pick = function (anchor, items, chosen, prefill) {
+    return new Promise(function (resolve) {
+      if (current) current.close(false);
+      var pop = document.createElement('div');
+      pop.className = 'ss-pop';
+      var search = document.createElement('input');
+      search.type = 'text';
+      search.className = 'ss-search';
+      search.placeholder = 'Type to search...';
+      search.setAttribute('autocomplete', 'off');
+      search.setAttribute('aria-label', 'Search');
+      var list = document.createElement('ul');
+      list.className = 'ss-list';
+      list.setAttribute('role', 'listbox');
+      pop.appendChild(search);
+      pop.appendChild(list);
+
+      var shown = [], active = -1, done = false;
+
+      function setActive(i) {
+        if (shown[active]) shown[active].classList.remove('ss-active');
+        active = shown.length ? Math.max(0, Math.min(i, shown.length - 1)) : -1;
+        if (shown[active]) { shown[active].classList.add('ss-active'); shown[active].scrollIntoView({ block: 'nearest' }); }
+      }
+      function build(filter) {
+        var words = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        list.textContent = '';
+        shown = [];
+        items.forEach(function (it) {
+          var text = it.label.toLowerCase();
+          if (!words.every(function (w) { return text.indexOf(w) !== -1; })) return;
+          var li = document.createElement('li');
+          li.setAttribute('role', 'option');
+          li.className = 'ss-opt' + (it.value === chosen ? ' ss-chosen' : '');
+          li.textContent = it.label;
+          li._value = it.value;
+          list.appendChild(li);
+          shown.push(li);
+        });
+        if (!shown.length) {
+          var none = document.createElement('li');
+          none.className = 'ss-none';
+          none.textContent = 'No matches';
+          list.appendChild(none);
+        }
+        var at = -1;
+        if (!words.length) shown.forEach(function (li, i) { if (li._value === chosen) at = i; });
+        active = -1;
+        setActive(at < 0 ? 0 : at);
+      }
+      function place() {
+        var r = anchor.getBoundingClientRect(), w = Math.max(r.width, 260), vw = window.innerWidth, vh = window.innerHeight;
+        var below = vh - r.bottom - 12, above = r.top - 12;
+        pop.style.width = w + 'px';
+        pop.style.left = Math.max(8, Math.min(r.left, vw - 8 - w)) + 'px';
+        if (below < 230 && above > below) {
+          pop.style.top = 'auto';
+          pop.style.bottom = (vh - r.top + 4) + 'px';
+          list.style.maxHeight = Math.max(120, Math.min(260, above - 56)) + 'px';
+        } else {
+          pop.style.bottom = 'auto';
+          pop.style.top = (r.bottom + 4) + 'px';
+          list.style.maxHeight = Math.max(120, Math.min(260, below - 56)) + 'px';
+        }
+      }
+      function finish(value) {
+        if (done) return;
+        done = true;
+        document.removeEventListener('mousedown', onOutside, true);
+        window.removeEventListener('resize', place);
+        window.removeEventListener('scroll', onScroll, true);
+        pop.remove();
+        resolve(value);
+      }
+      function onOutside(e) { if (!pop.contains(e.target)) finish(null); }
+      function onScroll(e) { if (!pop.contains(e.target)) place(); }
+
+      search.addEventListener('input', function () { build(search.value); });
+      search.addEventListener('keydown', function (e) {
+        var handled = true;
+        if (e.key === 'ArrowDown') setActive(active + 1);
+        else if (e.key === 'ArrowUp') setActive(active - 1);
+        else if (e.key === 'Enter') { if (shown[active]) finish(shown[active]._value); }
+        else if (e.key === 'Escape') finish(null);
+        else if (e.key === 'Tab') { finish(null); handled = false; }
+        else handled = false;
+        if (handled) { e.preventDefault(); e.stopPropagation(); }
+      });
+      list.addEventListener('click', function (e) {
+        var li = e.target.closest('.ss-opt');
+        if (li) finish(li._value);
+      });
+      list.addEventListener('mousemove', function (e) {
+        var li = e.target.closest('.ss-opt');
+        if (li && shown[active] !== li) setActive(shown.indexOf(li));
+      });
+
+      document.body.appendChild(pop);
+      search.value = prefill || '';
+      build(search.value);
+      place();
+      search.focus();
+      document.addEventListener('mousedown', onOutside, true);
+      window.addEventListener('resize', place);
+      window.addEventListener('scroll', onScroll, true);
+    });
+  };
+
   function scan(node) {
     if (!node || node.nodeType !== 1) return;
     if (node.tagName === 'SELECT') enhance(node);
