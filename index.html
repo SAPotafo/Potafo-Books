@@ -2,33 +2,55 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cash Book / Bank Book — Potafo</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.3338e6c3.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Potafo Accounts</title>
+<script>
+  // Apply saved theme before first paint (avoids a light flash)
+  try {
+    var t = JSON.parse(localStorage.getItem('potafo.accounts.theme'));
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">Pota<span>fo</span></div>
-    <div class="subtitle">Books &amp; Ledgers</div>
-    <div class="nav-section-label">Modules</div>
-    <nav class="nav">
-      <div class="nav-item active" data-module="cash"><span class="dot"></span>Cash Book</div>
-      <div class="nav-item" data-module="bank"><span class="dot"></span>Bank Book</div>
-    </nav>
-    <div class="sidebar-footer">Entries persist in your browser's localStorage under potafo_cashbook / potafo_bankbook keys.</div>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark">P</span>
+      <span class="brand-name">Potafo <b>Accounts</b></span>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-user" id="userBox" hidden>
+      <span class="user-email" id="userEmail"></span>
+      <button class="link-btn" id="signOutBtn" type="button">Sign out</button>
+    </div>
+    <div class="sidebar-foot">
+      <div class="sync" id="sync"><span class="sync-dot" id="syncDot"></span><span id="syncText">Saved in this browser</span></div>
+      <button class="theme-btn" id="themeBtn" type="button"></button>
+    </div>
   </aside>
 
-  <main class="main-content">
-    <div class="module active" id="mod-cash"></div>
-    <div class="module" id="mod-bank"></div>
-  </main>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Menu">&#9776;</button>
+      <h1 id="pageTitle">Potafo Accounts</h1>
+      <button class="theme-btn" id="themeBtnTop" type="button" aria-label="Toggle dark mode"></button>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<div id="modal-root"></div>
-
-<script src="app.432b8d44.js" defer></script>
+<!-- Settings, Supabase library, core, store (all data), then modules, then start -->
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/core.js"></script>
+<script src="js/store.js"></script>
+<script src="js/searchable-select.js"></script>
+<script src="js/xlsx-lite.js"></script>
+<script src="js/modules/cashbook.js"></script>
+<script src="js/modules/ledgers.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
