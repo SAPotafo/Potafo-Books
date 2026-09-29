@@ -30,6 +30,8 @@
     var drcr = cfg.balance !== 'plain';
 
     var root, data, filters, editingId = null, lastDate = '';
+    var picked = {};       // vouchers ticked for deleting: id -> true
+    var shownIds = [];     // the vouchers currently listed
     var accounts = [];     // [{ name, kind: 'cash' | 'bank' }] from Tally Ledgers
     var active = '';       // name of the account being shown
 
@@ -195,9 +197,15 @@
       '</form></dialog>' +
 
       // Pick a voucher to edit or delete (opened from the menu)
-      '<dialog id="cbPickDialog"><form method="dialog" novalidate>' +
+      '<dialog id="cbPickDialog" class="pick-wide"><form method="dialog" novalidate>' +
         '<h3 id="pTitle">Edit a voucher</h3>' +
-        '<div class="field"><label for="pVoucher">Voucher</label><select id="pVoucher"></select></div>' +
+        '<div class="field" id="pOne"><label for="pVoucher">Voucher</label><select id="pVoucher"></select></div>' +
+        // Delete a voucher: tick several, or Select all
+        '<div id="pMany" hidden>' +
+          '<div class="field"><label for="pSearch">Search vouchers</label><input type="search" id="pSearch" placeholder="Voucher, ledger, date, amount..."></div>' +
+          '<label class="pick-all"><input type="checkbox" data-bk="all" id="pAll"><span>Select all</span><span class="muted" id="pCount"></span></label>' +
+          '<div class="pick-list" id="pList"></div>' +
+        '</div>' +
         '<p class="muted" id="pNone" hidden>There are no vouchers in this book yet.</p>' +
         '<p class="form-error" id="pError"></p>' +
         '<div class="dlg-actions">' +
@@ -227,6 +235,7 @@
       active = name;
       data.account = name;
       save();
+      picked = {};
       lastDate = '';
       filters.q = '';
       $('#fQ').value = '';
@@ -305,29 +314,55 @@
 
     // ---- voucher picker: choose which voucher to edit or delete -------------
     var pickMode = 'edit';
+    var pickRows = [];      // the vouchers listed in the Delete dialog: { id, hay }
+
+    function voucherLabel(e) {
+      return e.voucher + ' · ' + P.fmtDate(e.date) + ' · ' + e.particulars + ' · ' + typeName(e.type) + ' ₹ ' + money(e.amount);
+    }
 
     function openPicker(mode) {
       pickMode = mode;
       var list = sortedEntries().reverse();       // newest first
-      $('#pTitle').textContent = mode === 'edit' ? 'Edit a voucher' : 'Delete a voucher';
-      $('#pVoucher').innerHTML = '<option value="">Select voucher...</option>' + list.map(function (e) {
-        return '<option value="' + e.id + '">' + esc(e.voucher + ' · ' + P.fmtDate(e.date) + ' · ' + e.particulars +
-          ' · ' + typeName(e.type) + ' ₹ ' + money(e.amount)) + '</option>';
-      }).join('');
-      $('#pNone').hidden = list.length > 0;
-      $('#pGo').textContent = mode === 'edit' ? 'Edit voucher' : 'Delete voucher';
-      $('#pGo').className = 'btn ' + (mode === 'edit' ? 'btn-primary' : 'btn-danger');
-      $('#pGo').disabled = !list.length;
+      var del = mode === 'delete';
+      $('#pTitle').textContent = del ? 'Delete vouchers' : 'Edit a voucher';
       $('#pError').textContent = '';
-      $('#cbPickDialog').showModal();
-      $('#pVoucher').focus();
+      $('#pNone').hidden = list.length > 0;
+      $('#pOne').hidden = del || !list.length;
+      $('#pMany').hidden = !del || !list.length;
+      $('#pGo').className = 'btn ' + (del ? 'btn-danger' : 'btn-primary');
+
+      if (del) {
+        // tick the vouchers to delete, or Select all (Select all follows the search box)
+        picked = {};
+        pickRows = list.map(function (e) { return { id: e.id, hay: (voucherLabel(e) + ' ' + (e.ref || '')).toLowerCase() }; });
+        $('#pSearch').value = '';
+        $('#pList').innerHTML = list.map(function (e) {
+          return '<label class="pick-row" data-id="' + e.id + '"><input type="checkbox" data-bk="row" data-id="' + e.id + '">' +
+            '<span class="pick-main"><b>' + esc(e.voucher) + '</b> · ' + P.fmtDate(e.date) + ' · ' + esc(e.particulars) +
+            (e.ref ? ' <span class="muted">(' + esc(e.ref) + ')</span>' : '') + '</span>' +
+            '<span class="pick-amt ' + e.type + '">' + typeName(e.type) + ' ₹ ' + money(e.amount) + '</span></label>';
+        }).join('');
+        filterPickList();
+        $('#pGo').disabled = true;
+        $('#cbPickDialog').showModal();
+        $('#pSearch').focus();
+      } else {
+        $('#pVoucher').innerHTML = '<option value="">Select voucher...</option>' + list.map(function (e) {
+          return '<option value="' + e.id + '">' + esc(voucherLabel(e)) + '</option>';
+        }).join('');
+        $('#pGo').textContent = 'Edit voucher';
+        $('#pGo').disabled = !list.length;
+        $('#cbPickDialog').showModal();
+        $('#pVoucher').focus();
+      }
     }
 
     function pickGo() {
+      if (pickMode === 'delete') { deleteSelected(); return; }      // asks for confirmation, then deletes
       var id = $('#pVoucher').value;
       if (!id) { $('#pError').textContent = 'Choose a voucher first.'; return; }
       $('#cbPickDialog').close();
-      if (pickMode === 'edit') loadEntry(id); else deleteEntry(id);   // delete asks for confirmation
+      loadEntry(id);
     }
 
     // ---- table ------------------------------------------------------------
@@ -372,6 +407,58 @@
         '<table><thead><tr><th>Date</th><th>Voucher</th><th>Particulars</th>' +
         '<th class="num">' + IN + ' (&#8377;)</th><th class="num">' + OUT + ' (&#8377;)</th><th class="num">Balance (&#8377;)</th></tr></thead>' +
         '<tbody>' + body + '</tbody></table>';
+    }
+
+    // ---- Delete a voucher: tick several, or Select all, then delete ----------
+    function tickRow(id, on) {
+      if (on) picked[id] = true; else delete picked[id];
+      var cb = root.querySelector('[data-bk="row"][data-id="' + id + '"]');
+      if (cb) cb.checked = on;
+    }
+
+    // Select all box, the count and the Delete button inside the dialog
+    function syncPicked() {
+      var n = Object.keys(picked).length, all = $('#pAll');
+      all.disabled = !shownIds.length;
+      all.checked = shownIds.length > 0 && shownIds.every(function (id) { return picked[id]; });
+      all.indeterminate = !all.checked && shownIds.some(function (id) { return picked[id]; });
+      $('#pCount').textContent = n ? n + ' selected' : '';
+      $('#pGo').textContent = n ? 'Delete ' + n + ' voucher' + (n === 1 ? '' : 's') : 'Delete vouchers';
+      $('#pGo').disabled = !n;
+    }
+
+    // the search box in the dialog hides vouchers that do not match; Select all then applies to those shown
+    function filterPickList() {
+      var q = $('#pSearch').value.trim().toLowerCase();
+      shownIds = [];
+      pickRows.forEach(function (r) {
+        var show = !q || r.hay.indexOf(q) !== -1;
+        var row = root.querySelector('.pick-row[data-id="' + r.id + '"]');
+        if (row) row.hidden = !show;
+        if (show) shownIds.push(r.id);
+      });
+      syncPicked();
+    }
+
+    async function deleteSelected() {
+      var doomed = data.entries.filter(function (e) { return picked[e.id]; });
+      if (!doomed.length) return;
+      var inSum = 0, outSum = 0;
+      doomed.forEach(function (e) { if (e.type === 'in') inSum += paise(e.amount); else outSum += paise(e.amount); });
+      var ok = await P.confirm({
+        title: 'Delete ' + doomed.length + ' voucher' + (doomed.length === 1 ? '' : 's') + '?',
+        message: doomed.length + ' selected voucher' + (doomed.length === 1 ? '' : 's') + ' (' + INS.toLowerCase() + ' ₹ ' + money(rupees(inSum)) +
+          ', ' + OUTS.toLowerCase() + ' ₹ ' + money(rupees(outSum)) + ') will be removed. This cannot be undone.',
+        confirmText: 'Delete ' + doomed.length
+      });
+      if (!ok) return;
+      $('#cbPickDialog').close();
+      data.entries = data.entries.filter(function (e) { return !picked[e.id]; });
+      if (editingId && picked[editingId]) resetForm();
+      picked = {};
+      save();
+      render();
+      P.toast(doomed.length + ' voucher' + (doomed.length === 1 ? '' : 's') + ' deleted');
     }
 
     function card(label, paiseVal, cls) {
@@ -484,22 +571,6 @@
       P.toast(wasEditing ? 'Entry updated' : typeName(type) + ' added');
     }
 
-    async function deleteEntry(id) {
-      var e = data.entries.filter(function (x) { return x.id === id; })[0];
-      if (!e) return;
-      var ok = await P.confirm({
-        title: 'Delete ' + e.voucher + '?',
-        message: e.particulars + ' · ₹ ' + money(e.amount) + ' · ' + P.fmtDate(e.date) + '. This cannot be undone.',
-        confirmText: 'Delete'
-      });
-      if (!ok) return;
-      data.entries = data.entries.filter(function (x) { return x.id !== id; });
-      if (editingId === id) resetForm();
-      save();
-      render();
-      P.toast('Entry deleted');
-    }
-
     // ---- filters / export -------------------------------------------------
     function syncFilterInputs() {
       $('#fFrom').value = filters.from;
@@ -607,7 +678,17 @@
     }
 
     function onInput(ev) {
-      var id = ev.target.id;
+      var t = ev.target, id = t.id;
+
+      // Delete a voucher dialog: a voucher's tick box, Select all, or the search box
+      if (t.dataset && t.dataset.bk) {
+        if (t.dataset.bk === 'all') shownIds.forEach(function (rowId) { tickRow(rowId, t.checked); });
+        else tickRow(t.dataset.id, t.checked);
+        syncPicked();
+        return;
+      }
+      if (id === 'pSearch') { filterPickList(); return; }
+
       if (id === 'accSelect') { selectAccount(ev.target.value); return; }
       if (id === 'eParticulars') { autoType(); return; }
       if (id === 'eType') { hint('Set to ' + typeName(getType()) + '.'); return; }
@@ -643,7 +724,9 @@
         data = load();
         editingId = null;
         lastDate = '';
-        accounts = (P.ledgers && P.ledgers.accounts ? P.ledgers.accounts() : []).filter(function (a) {
+        picked = {};
+        shownIds = [];
+        accounts =(P.ledgers && P.ledgers.accounts ? P.ledgers.accounts() : []).filter(function (a) {
           return cfg.kinds.indexOf(a.kind) !== -1;
         });
         active = hasAccount(data.account) ? data.account : defaultAccount();

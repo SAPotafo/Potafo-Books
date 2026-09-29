@@ -117,8 +117,6 @@
 
     // ---- section 1: the uploaded bank statement
     '<div id="bsSecStatement">' +
-      '<p class="muted hint">The statement is read from row ' + FIRST_ROW + ': Sl no. in A, Date in D, Remark in G, ' +
-        'Withdrawal in H, Deposit in I and Balance in J. It ends at the first row with no Sl no.</p>' +
       '<div id="bsReport"></div>' +
       '<div class="cards" id="bsCards"></div>' +
 
@@ -147,11 +145,6 @@
 
     // ---- section 2: reconcile the statement lines against a ledger
     '<div id="bsSecRecon" hidden>' +
-      '<p class="muted hint">These statement lines are not reconciled yet. Choose a ledger for each line (choosing one ticks the line), ' +
-        'or tick lines / Select all and set one ledger for all of them. <b>Reconcile</b> posts them to the Cash Book of this bank account ' +
-        '(one voucher per ledger per date), and they leave this list.</p>' +
-      '<p class="muted hint kbd-hint"><b>Keyboard:</b> &uarr; &darr; move between lines &middot; Enter, Space or just start typing to pick a ledger &middot; ' +
-        'Delete clears it &middot; Ctrl+C copies a line\'s ledger, Ctrl+V pastes it on another line &middot; Ctrl+Enter reconciles the ticked lines.</p>' +
       '<div class="cards" id="rcCards"></div>' +
       '<div class="panel filters">' +
         '<div class="field"><label>From</label><input type="date" id="rcFrom"></div>' +
@@ -230,7 +223,7 @@
     var done = reconciledIds();
     var body = lines.map(function (l) {
       return '<tr><td class="nowrap">' + P.fmtDate(l.date) + '</td>' +
-        '<td>' + esc(l.desc) + (done[l.id] ? ' <span class="tag tag-ok">Reconciled</span>' : '') + '</td>' +
+        '<td>' + esc(l.desc) + '</td>' +
         '<td class="num out">' + (l.debit ? money(l.debit) : '') + '</td>' +
         '<td class="num in">' + (l.credit ? money(l.credit) : '') + '</td>' +
         '<td class="num strong' + (l.balance !== null && l.balance < 0 ? ' neg' : '') + '">' + (l.balance === null ? '' : (l.balance < 0 ? '-' : '') + money(Math.abs(l.balance))) + '</td></tr>';

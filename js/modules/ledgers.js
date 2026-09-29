@@ -153,12 +153,28 @@
     });
   }
 
+  // 'Assets' | 'Liabilities' | 'Income' | 'Expenses' for a ledger (found by following its groups up), or ''
+  function natureOfLedger(ledgerName) {
+    var d = P.store.get(KEY, { ledgers: [], groups: [] });
+    var ledger = (d.ledgers || []).filter(function (l) { return l.name === ledgerName; })[0];
+    if (!ledger) return '';
+    var name = ledger.under;
+    for (var i = 0; i < 25 && name; i++) {
+      if (NATURE[name]) return NATURE[name];
+      var k = norm(name);
+      var sub = (d.groups || []).filter(function (g) { return norm(g.name) === k; })[0];
+      name = sub ? sub.parent : '';
+    }
+    return '';
+  }
+
   // Available to other modules
   P.ledgers = {
     all: function () { return (P.store.get(KEY, { ledgers: [] }).ledgers || []).slice(); },
     groups: function () { return (P.store.get(KEY, { groups: [] }).groups || []).slice(); },
     flow: flowOf,
-    accounts: accountsOf
+    accounts: accountsOf,
+    nature: natureOfLedger
   };
 
   // ---- markup -----------------------------------------------------------

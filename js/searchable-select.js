@@ -336,7 +336,8 @@
         if (li && shown[active] !== li) setActive(shown.indexOf(li));
       });
 
-      document.body.appendChild(pop);
+      // inside an open dialog the popup must live in that dialog, or the page behind it (and the popup) is not clickable
+      (anchor.closest('dialog') || document.body).appendChild(pop);
       search.value = prefill || '';
       build(search.value);
       place();

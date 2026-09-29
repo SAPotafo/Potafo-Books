@@ -169,6 +169,17 @@ input:focus, select:focus { outline: 2px solid var(--brand); outline-offset: -1p
 .chk { width: 38px; padding-right: 0; }
 input[type=checkbox] { accent-color: var(--brand); width: 16px; height: 16px; cursor: pointer; }
 tbody tr.sel { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+dialog.pick-wide { width: min(600px, calc(100vw - 32px)); }
+.pick-all { display: flex; align-items: center; gap: 10px; font-weight: 600; padding: 4px 2px; cursor: pointer; }
+.pick-list { max-height: 44vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.pick-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.pick-row:last-child { border-bottom: 0; }
+.pick-row:hover { background: var(--bg); }
+.pick-row[hidden] { display: none; }
+.pick-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pick-amt { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pick-amt.in { color: var(--in); }
+.pick-amt.out { color: var(--out); }
 dialog.wide { width: min(620px, calc(100vw - 32px)); }
 .up-list { max-height: 45vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
 
@@ -289,6 +300,78 @@ dialog h3 { font-size: 18px; }
 .empty-state { padding: 24px; }
 .empty-state h3 { margin-bottom: 6px; }
 #cbMain[hidden], #cbEmpty[hidden] { display: none; }
+
+/* ---- operational statement ---- */
+.op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.op-col { padding: 16px; }
+.op-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.op-top h3 { font-size: 18px; }
+.op-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.op-head { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.op-head-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.op-name-input { font-weight: 600; }
+.op-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.op-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--border);
+}
+.op-chip.gone { border-style: dashed; color: var(--muted); }
+.op-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 5px; border-radius: 50%; }
+.op-chip button:hover { color: var(--neg); }
+.op-add {
+  border: 1px dashed var(--brand); background: none; color: var(--brand); border-radius: 999px;
+  padding: 3px 12px; cursor: pointer; font-weight: 600;
+}
+.op-add:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.op-bar { margin-bottom: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
+.op-orders-info { margin: 10px 0; }
+.op-data-block { margin-bottom: 20px; }
+.op-data-block h4 { font-size: 16px; margin-bottom: 8px; }
+.op-dt { margin-bottom: 8px; }
+.op-dt td { padding: 5px 6px; }
+.op-dt th { padding: 6px; }
+.op-dt input[type=number] { text-align: right; }
+.sv-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.sv-item summary { display: flex; align-items: center; gap: 14px; padding: 8px 12px; cursor: pointer; list-style: none; flex-wrap: wrap; }
+.sv-item summary::-webkit-details-marker { display: none; }
+.sv-item summary::before { content: "\25B8"; color: var(--muted); }
+.sv-item[open] summary::before { content: "\25BE"; }
+.sv-item[open] summary { background: var(--bg); }
+.sv-date { font-weight: 700; min-width: 92px; }
+.sv-meta { color: var(--muted); }
+.sv-meta.in { color: var(--in); font-weight: 600; }
+.sv-meta.out { color: var(--out); font-weight: 600; }
+.sv-actions { margin-left: auto; white-space: nowrap; }
+.sv-item .op-dt { margin: 0; }
+.sv-table tr.sv-group td { background: var(--bg); border-top: 2px solid var(--border); }
+.sv-table tr.sv-group .sv-meta { margin-left: 14px; }
+.sv-table tr.tick td { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.sv-table .sv-amt { width: 150px; text-align: right; }
+.sv-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sv-item summary input[type=checkbox] { flex: none; }
+.op-data-top { display: flex; gap: 12px; flex-wrap: wrap; }
+.op-data-top .field { flex: 0 0 200px; }
+.op-dt tr.op-sec td { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: 12px; }
+.op-dt tr.op-sec-income td { background: var(--in-bg); color: var(--in); }
+.op-dt tr.op-sec-expense td { background: var(--out-bg); color: var(--out); }
+.op-dt td.op-indent { padding-left: 24px; }
+.op-dt td.num { width: 190px; }
+dialog.op-wide { width: min(940px, calc(100vw - 32px)); }
+.op-dlg-body { max-height: 62vh; overflow: auto; padding-right: 4px; }
+.op-side h4 { font-size: 16px; margin-bottom: 10px; }
+.op-indent { padding-left: 28px !important; }
+.op-head-cell { background: var(--bg); }
+.op-sub { border-top: 1px solid var(--border); }
+/* Income = green, Expense = orange: the Income / Expense heading row and the total rows */
+.op-h th.op-g-in { background: var(--in-bg); color: var(--in); }
+.op-h th.op-g-out { background: var(--out-bg); color: var(--out); }
+.op-h td.op-tot-in { background: var(--in-bg); color: var(--in); }
+.op-h td.op-tot-out { background: var(--out-bg); color: var(--out); }
+.op-h tr.row-total td { border-top: 2px solid var(--border); }
+.op-h .op-split { border-left: 2px solid var(--border); }
+.op-h th.op-group { text-align: center; font-size: 13px; letter-spacing: .06em; color: var(--text); }
+.op-h td.num, .op-h th.num { white-space: nowrap; }
+@media (max-width: 900px) { .op-grid { grid-template-columns: 1fr; } }
 
 /* ---- bank statement ---- */
 .bs-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
