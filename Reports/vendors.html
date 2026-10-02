@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vendor List</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Reports</span>
+    <nav>
+      <a href="reports.html">Report Generator</a>
+      <a href="vendors.html" class="active">Vendor List</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Vendor List</h1>
+    <p class="subtitle">Upload a vendor list or add vendors one by one, each with its Commission %.</p>
+
+    <div class="panel">
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Search vendors…" aria-label="Search vendors">
+        <span class="spacer"></span>
+        <button id="uploadBtn">Upload vendor list</button>
+        <button id="exportBtn">Export CSV</button>
+        <button id="addBtn" class="primary">+ Add Vendor</button>
+        <input type="file" id="uploadFile" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv" hidden>
+      </div>
+      <p class="hint">Upload file format (Excel or CSV): first column <strong>Vendor Name</strong>, second column <strong>Commission %</strong>. Vendors already in the list get their commission updated.</p>
+      <div id="message" class="message" hidden></div>
+    </div>
+
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="headRow"></tr></thead>
+          <tbody id="vendorRows"></tbody>
+        </table>
+      </div>
+      <div id="empty" class="empty" hidden></div>
+      <div id="count" class="count"></div>
+    </div>
+  </main>
+
+  <dialog id="vendorDialog">
+    <form id="vendorForm" novalidate>
+      <h2 id="dialogTitle">Add Vendor</h2>
+      <div class="form-grid">
+        <label class="full">Vendor Name *
+          <input type="text" name="name" maxlength="120" autocomplete="off">
+        </label>
+        <label class="full">Commission %
+          <input type="text" name="commission" inputmode="decimal" maxlength="8" autocomplete="off" placeholder="e.g. 12.5">
+        </label>
+      </div>
+      <div id="formError" class="message error" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- SheetJS reads Excel/ODS files. CSV files still work if this fails to load (e.g. offline). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="common.js"></script>
+  <script src="vendors.js"></script>
+</body>
+</html>

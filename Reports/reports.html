@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Reports</span>
+    <nav>
+      <a href="reports.html" class="active">Report Generator</a>
+      <a href="vendors.html">Vendor List</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="no-print">
+      <h1>Report Generator</h1>
+      <p class="subtitle">Upload a file, select the columns, then generate, export or print the report.</p>
+
+      <div class="panel">
+        <h2>1. Upload file</h2>
+        <div class="toolbar">
+          <button id="chooseFileBtn" class="primary">Choose file…</button>
+          <input type="file" id="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" hidden>
+          <label id="sheetWrap" hidden>Sheet
+            <select id="sheet" aria-label="Sheet"></select>
+          </label>
+          <span id="fileInfo" class="message">Excel (.xlsx, .xls), CSV, TSV or ODS. The first row must contain the column names.</span>
+        </div>
+      </div>
+
+      <div id="options" hidden>
+        <div class="panel">
+          <h2>2. Select columns</h2>
+          <div class="grid-2">
+            <label class="field">Order No
+              <select id="colOrderNo"></select>
+            </label>
+            <label class="field">Date
+              <select id="colDate"></select>
+            </label>
+            <label class="field">Vendor Name
+              <select id="colVendor"></select>
+            </label>
+            <label class="field">Amount
+              <select id="colAmount"></select>
+            </label>
+          </div>
+          <p class="hint">Pick which column of your file holds each value. Columns left as "(not in file)" are omitted from the report.</p>
+        </div>
+
+        <div class="panel">
+          <h2>3. Select vendor</h2>
+          <div class="combo">
+            <input type="search" id="vendorSearch" placeholder="Search vendors…" autocomplete="off"
+                   aria-controls="vendorList" aria-label="Search vendors">
+            <div id="vendorList" class="combo-list" role="listbox" aria-multiselectable="true" aria-label="Vendors"></div>
+            <div id="vendorCount" class="count"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="toolbar">
+            <button id="generateBtn" class="primary">Generate reports</button>
+            <button id="exportBtn" disabled>Export all (Excel)</button>
+            <button id="printBtn" disabled>Print all / Save as PDF</button>
+            <span id="message" class="message"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- One report section per selected vendor is rendered here. -->
+    <div id="report" hidden></div>
+  </main>
+
+  <!-- SheetJS reads Excel/ODS files. CSV files still work if this fails to load (e.g. offline). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="common.js"></script>
+  <script src="reports.js"></script>
+</body>
+</html>

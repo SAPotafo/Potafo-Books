@@ -469,5 +469,6 @@
     saveBlob((rep.filename || 'report') + '.pdf', new Blob([bytes], { type: 'application/pdf' }));
   }
 
-  P.exporter = { xlsx: xlsx, pdf: pdf, stamp: stamp };
+  // zip / xml / colName are shared with js/reports/workbook.js (multi-sheet workbooks with formulas)
+  P.exporter = { xlsx: xlsx, pdf: pdf, stamp: stamp, zip: zip, xml: xml, colName: colName };
 })();
