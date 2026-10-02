@@ -5,7 +5,7 @@
         TDS or TCS (% of Amount) · Commission % (from the Vendor List) · Commission Amount · GST (18% of Commission Amount) · Final Amount
         The tax follows the vendor's Type in the Vendor List: Restaurant = TDS 1%, Mart = TCS 0.5%.
         Final Amount = Amount - TDS/TCS - Commission Amount - GST
-   Export all (Excel) gives one workbook with a Summary and one sheet per vendor. Export separately gives one Excel file
+   Export all (Excel) gives one workbook with a Summary and one sheet per vendor. Export separately gives one zip with an Excel file
    per vendor, except that vendors put in a group (the Grouping box, js/reports/groups.js) share one file, a sheet each.
    Each vendor card also has its own Export Excel and Export CSV.
    Save report keeps the report (the chosen columns and vendors, the ticked reports, the orders of those vendors and the
@@ -634,7 +634,7 @@
       for (var i = 0; i < files.length; i++) {
         var f = files[i], names = f.group ? f.sections.map(function (s) { return s.name; }) : null;
         var month = P.reports.mail.monthLabel(f.sections, savedDoc.savedAt), msg = P.reports.mail.message(f.name, month, names);
-        var fileName = 'monthly-statement-' + H.fileSafe(f.name) + '-' + P.isoDate() + '.xlsx';
+        var fileName = statementFile(f.name, f.sections, 'xlsx');
         items.push({
           for: f.name, group: !!f.group, vendors: f.sections.map(function (s) { return s.name; }),
           to: emailsFor(f.sections), cc: ccFor(f.sections), subject: msg.subject, body: msg.body,
@@ -662,7 +662,7 @@
   function sendMail(sections, greeting, vendorNames) {
     var el = $('#msMsg'), name = esc(greeting);
     try {
-      var to = emailsFor(sections), cc = ccFor(sections), fileName = 'monthly-statement-' + H.fileSafe(greeting) + '-' + P.isoDate() + '.xlsx';
+      var to = emailsFor(sections), cc = ccFor(sections), fileName = statementFile(greeting, sections, 'xlsx');
       el.className = 'muted';
       el.innerHTML = 'Preparing the email for <b>' + name + '</b>&hellip;';
 
@@ -746,42 +746,48 @@
     return lines;
   }
 
+  // File names: the vendor (or group), the month its orders are in, and the word Statement, e.g. "Alankar Restaurant September 2026 Statement.xlsx".
+  function statementFile(who, sections, ext) {
+    var month = P.reports.mail.monthLabel(sections, savedDoc ? savedDoc.savedAt : null);
+    var name = (who + ' ' + month + ' Statement').replace(/[\\\\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return name.slice(0, 120).trim() + '.' + ext;
+  }
+
   // Excel workbook with live formulas (see js/reports/statement-xlsx.js). index = one vendor, otherwise every vendor.
   function exportExcel(index) {
     try {
       var one = index != null;
       var sections = one ? [report.sections[index]] : pickedSections();
       if (!sections.length) { P.toast('Tick at least one report to export.', true); return; }
-      var name = one ? 'monthly-statement-' + H.fileSafe(sections[0].name) : 'monthly-statement';
-      P.reports.workbook.save(name + '-' + P.isoDate() + '.xlsx', P.reports.statementWorkbook(report, sections));
+      P.reports.workbook.save(statementFile(one ? sections[0].name : 'All Vendors', sections, 'xlsx'), P.reports.statementWorkbook(report, sections));
       P.toast('Excel file created');
     } catch (err) {
       P.toast('Could not create the Excel file: ' + (err && err.message || err), true);
     }
   }
 
-  // Separate Excel files, downloaded one after another: one per group (a sheet per vendor) and one per vendor
-  // that is in no group. The browser may ask once to allow several downloads.
+  // Separate Excel files in ONE zip: one file per group (a sheet per vendor) and one per vendor that is in no group.
   async function exportEach() {
-    var files = groupBox.plan(pickedSections()), used = Object.create(null), made = 0;
+    var files = groupBox.plan(pickedSections()), used = Object.create(null);
     if (!files.length) { P.toast('Tick at least one report to export.', true); return; }
     $('#msExportEach').disabled = true;
     try {
+      var entries = [];
       for (var i = 0; i < files.length; i++) {
-        var f = files[i], base = 'monthly-statement-' + H.fileSafe(f.name) + '-' + P.isoDate(), name = base;
-        for (var n = 2; used[name]; n++) name = base + '-' + n;       // a group and a vendor can give the same file name
-        used[name] = true;
-        P.reports.workbook.save(name + '.xlsx', P.reports.statementWorkbook(report, f.sections));
-        made++;
-        if (i < files.length - 1) await new Promise(function (resolve) { setTimeout(resolve, 400); });
+        var f = files[i], name = statementFile(f.name, f.sections, 'xlsx');
+        for (var n = 2; used[name.toLowerCase()]; n++) name = statementFile(f.name, f.sections, 'xlsx').replace(/\.xlsx$/, ' (' + n + ').xlsx');   // a group and a vendor can give the same name
+        used[name.toLowerCase()] = true;
+        var blob = P.reports.workbook.build(P.reports.statementWorkbook(report, f.sections));
+        entries.push({ name: name, data: new Uint8Array(await blob.arrayBuffer()) });
       }
-      P.toast(made + ' Excel file' + (made === 1 ? '' : 's') + ' created');
+      var zipName = P.reports.mail.monthLabel(pickedSections(), savedDoc ? savedDoc.savedAt : null) + ' Statements.zip';
+      P.reports.workbook.download(zipName, P.exporter.zip(entries, 'application/zip'));
+      P.toast(entries.length + ' Excel file' + (entries.length === 1 ? '' : 's') + ' saved in ' + zipName);
     } catch (err) {
-      P.toast('Could not create the Excel files: ' + (err && err.message || err), true);
+      P.toast('Could not create the zip file: ' + (err && err.message || err), true);
     }
     if (root && report) $('#msExportEach').disabled = false;
   }
-
   // ---- saving ------------------------------------------------------------------------------------
   // Keep the report in Saved Reports, then show that list. The report is rebuilt first so what is saved is what is on screen.
   function saveReport() {
@@ -830,7 +836,7 @@
       case 'prepare-drafts': if (report && savedDoc) prepareDrafts(); break;
       case 'export-one':
         var s = report && report.sections[Number(b.dataset.section)];
-        if (s) H.downloadCSV(H.fileSafe(s.name) + '-' + P.isoDate() + '.csv', sectionLines(s, false));
+        if (s) H.downloadCSV(statementFile(s.name, [s], 'csv'), sectionLines(s, false));
         break;
     }
   }

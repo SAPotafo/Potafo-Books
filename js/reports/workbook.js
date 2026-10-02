@@ -230,8 +230,9 @@
     return X.zip(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }
 
-  function save(filename, spec) {
-    var blob = build(spec), a = document.createElement('a');
+  // Download any Blob (an .xlsx, or a .zip of them)
+  function download(filename, blob) {
+    var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
     document.body.appendChild(a);
@@ -240,5 +241,7 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
 
-  P.reports.workbook = { build: build, save: save, uniqueNames: uniqueNames, ref: ref };
+  function save(filename, spec) { download(filename, build(spec)); }
+
+  P.reports.workbook = { build: build, save: save, download: download, uniqueNames: uniqueNames, ref: ref };
 })();

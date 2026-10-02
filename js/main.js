@@ -96,7 +96,7 @@
   function paintSync(status, detail) {
     var l = LABELS[status] || LABELS.local;
     syncDot.className = 'sync-dot ' + l[0];
-    syncText.textContent = l[1];
+    syncText.textContent = l[1] + (status === 'error' && detail ? ' (' + String(detail).slice(0, 70) + ')' : '');   // show why, not only that it failed
     document.getElementById('sync').title = detail || '';
     var email = P.store.user();
     userBox.hidden = !(P.store.configured() && email);

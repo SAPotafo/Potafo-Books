@@ -85,6 +85,7 @@
 
   function set(key, value) {
     if (value === undefined) return false;
+    if (value === null) value = {};          // Supabase column "value" cannot be empty (null): a cleared item is kept as {}
     var v = clone(value);
     cache[key] = v;
     var kept = lsSet(key, v);
@@ -120,12 +121,25 @@
       var now = new Date().toISOString();
       var rows = keys.map(function (k) {
         sent[k] = dirty[k];
-        return { key: k, value: cache[k], updated_by: session.user.id, updated_at: now };
+        // an item saved empty (null) by an earlier version would be refused by Supabase and block everything: send {} instead
+        return { key: k, value: cache[k] == null ? {} : cache[k], updated_by: session.user.id, updated_at: now };
       });
       var res = await client.from(TABLE).upsert(rows, { onConflict: 'key' });
-      if (res.error) throw res.error;
-      keys.forEach(function (k) { if (dirty[k] === sent[k]) delete dirty[k]; });   // keep it if edited again meanwhile
+      var done = keys, failure = null;
+      if (res.error) {
+        failure = res.error;
+        if (rows.length > 1) {
+          // One refused row fails the whole batch. Send them one by one so every good row still goes up.
+          done = []; failure = null;
+          for (var i = 0; i < rows.length; i++) {
+            var one = await client.from(TABLE).upsert([rows[i]], { onConflict: 'key' });
+            if (one.error) failure = failure || one.error; else done.push(rows[i].key);
+          }
+        } else done = [];
+      }
+      done.forEach(function (k) { if (dirty[k] === sent[k]) delete dirty[k]; });   // keep it if edited again meanwhile
       saveDirtyList();
+      if (failure) throw failure;
       clearTimeout(retryTimer);
     } catch (e) {
       setStatus('error', (e && e.message) || 'Could not reach Supabase');

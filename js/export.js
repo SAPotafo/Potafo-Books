@@ -85,7 +85,7 @@
     var dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
 
     files.forEach(function (f) {
-      var name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+      var name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);   // text, or bytes (Uint8Array)
 
       var lh = new Uint8Array(30 + name.length), v = new DataView(lh.buffer);
       v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true);

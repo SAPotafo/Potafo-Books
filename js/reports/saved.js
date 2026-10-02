@@ -90,7 +90,7 @@
     },
 
     remove: function (id) {
-      P.store.set(DOC + id, null);                                     // the store has no delete: the data is emptied
+      P.store.set(DOC + id, { deleted: true });                        // the store has no delete: the data is replaced by a marker (an empty value cannot be synced)
       return writeIndex(readIndex().filter(function (x) { return x.id !== id; }));
     },
 
