@@ -516,6 +516,13 @@ dialog.confirm { width: min(420px, calc(100vw - 32px)); }
 .rp-menu button:hover, .rp-menu button:focus-visible { background: var(--bg); outline: none; }
 .ms-sendrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); }
 .ms-sendrow:first-of-type { border-top: 0; }
+dialog.ms-missing { width: min(940px, calc(100vw - 32px)); }
+.ms-missing-body { max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.ms-missing-body th { position: sticky; top: 0; z-index: 1; }
+.ms-missing-body td { padding: 6px 8px; vertical-align: middle; }
+.ms-missing-body td:first-child { font-weight: 600; white-space: nowrap; }
+.ms-missing-body input, .ms-missing-body select { width: 100%; min-width: 110px; padding: 6px 8px; }
+#msMsg .btn { margin: 4px 4px 0 0; }
 a.btn { text-decoration: none; }
 a.btn-ghost { color: var(--text); }
 .ms-savedhead { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }

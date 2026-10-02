@@ -389,6 +389,45 @@
     if (file) upload(file);
   }
 
+  // Add or fill in several vendors at once (used by "Add the missing vendors" in the Monthly statement).
+  //   items = [{ name, type, commission, email, cc }]  (type: 'restaurant' | 'mart'; commission: text or number; email / cc: text)
+  // A vendor already in the list is updated with the values given (an empty value never wipes what is there); a new one is added
+  // and needs a Type. Nothing is saved when something is wrong. Returns { added, updated } or { error }.
+  P.reports.vendors.upsert = function (items) {
+    var list = load(), byKey = Object.create(null), prepared = [];
+    list.forEach(function (v) { byKey[H.vendorKey(v.name)] = v; });
+
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], name = cleanName(it.name), existing = byKey[H.vendorKey(name)];
+      var type = parseType(it.type) || (existing && existing.type) || '';
+      var commission = parseCommission(it.commission), mail = parseEmails(it.email), copy = parseEmails(it.cc);
+      if (!name) return { error: 'A vendor has no name.' };
+      if (!type) return { error: 'Choose Restaurant or Mart for "' + name + '".' };
+      if (commission === null) return { error: 'Commission % for "' + name + '" must be a number between 0 and 100.' };
+      if (mail.bad) return { error: 'Email (To) for "' + name + '" has an address that is not valid.' };
+      if (copy.bad) return { error: 'CC for "' + name + '" has an address that is not valid.' };
+      prepared.push({ name: name, type: type, commission: commission, email: mail.value, cc: copy.value });
+    }
+
+    var added = 0, updated = 0;
+    prepared.forEach(function (p) {
+      var existing = byKey[H.vendorKey(p.name)];
+      if (existing) {
+        existing.type = p.type;
+        if (p.commission !== '') existing.commission = p.commission;
+        if (p.email) existing.email = p.email;
+        if (p.cc) existing.cc = p.cc;
+        updated++;
+      } else {
+        var v = { id: P.uid(), vid: '', name: p.name, type: p.type, commission: p.commission, email: p.email, cc: p.cc };
+        list.push(v);
+        byKey[H.vendorKey(p.name)] = v;
+        added++;
+      }
+    });
+    if (!save(list)) return { error: 'Could not save the Vendor List.' };
+    return { added: added, updated: updated };
+  };
   P.reports.register({
     id: 'vendors',
     title: 'Vendor List',

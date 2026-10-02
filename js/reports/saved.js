@@ -94,6 +94,29 @@
       return writeIndex(readIndex().filter(function (x) { return x.id !== id; }));
     },
 
+    // A saved report keeps the Type / Commission % / ID / emails its vendors had when it was saved. Where one of those was still
+    // empty (the vendor was missing from the Vendor List) and the Vendor List has it now, fill it in and save. Values that are already
+    // set are never changed. Returns how many vendors were filled in.
+    refreshInfo: function (doc) {
+      if (!doc.input.filterVendors) return 0;
+      var now = P.reports.vendors.infoMap(), changed = 0;
+      doc.input.vendors.forEach(function (v) {
+        var cur = now[v.key];
+        if (!cur) return;
+        var snap = doc.input.info[v.key] || (doc.input.info[v.key] = { type: '', commission: '', vid: '', email: '', cc: '' }), did = false;
+        ['type', 'commission', 'vid', 'email', 'cc'].forEach(function (f) {
+          var empty = snap[f] === '' || snap[f] == null, has = cur[f] !== '' && cur[f] != null;
+          if (empty && has) { snap[f] = cur[f]; did = true; }
+        });
+        if (did) changed++;
+      });
+      if (changed) {
+        var d = P.store.get(DOC + doc.id, null);
+        if (d && d.input) { d.input.info = JSON.parse(JSON.stringify(doc.input.info)); P.store.set(DOC + doc.id, d); }
+      }
+      return changed;
+    },
+
     setPicks: function (id, picks) {
       var d = P.store.get(DOC + id, null);
       if (!d) return false;

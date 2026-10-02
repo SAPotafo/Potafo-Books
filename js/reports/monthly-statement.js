@@ -445,8 +445,13 @@
         (noCommission.length > 5 ? ' and ' + (noCommission.length - 5) + ' more' : '') + ' — commission taken as 0');
     }
 
+    // every vendor the notes above are about (not the "(blank)" row), once
+    var missing = [];
+    noType.concat(noCommission).forEach(function (n) { if (n !== '(blank)' && missing.indexOf(n) === -1) missing.push(n); });
+
     return {
       warnings: warnings,
+      missing: missing,
       report: {
         sections: sections, mappedKeys: mapped.map(function (f) { return f.key; }), hasAmount: hasAmount,
         gstRate: GST_RATE, source: input.source, filterVendors: filterVendors
@@ -485,7 +490,7 @@
 
     rememberColumns();                  // a column choice that was accepted as suggested is remembered too
     var input = currentInput(), out = buildStatement(input);
-    say('#msMsg', out.warnings.length ? 'Note: ' + out.warnings.join('; ') + '.' : '', out.warnings.length > 0);
+    showWarnings(out);
 
     // reports already ticked or unticked for export keep their choice when the vendor selection changes
     var picks = Object.create(null);
@@ -788,6 +793,117 @@
     }
     if (root && report) $('#msExportEach').disabled = false;
   }
+  // ---- vendors missing from the Vendor List ----------------------------------------------------------
+  var lastMissing = [];               // the vendors the note is about, for the "Add the missing vendors" form
+
+  // The note under the buttons: what is missing, with the way to fix it. extra = another sentence to add.
+  function showWarnings(out, extra) {
+    lastMissing = out.missing || [];
+    var el = root && $('#msMsg');
+    if (!el) return;
+    el.className = out.warnings.length ? 'form-error' : 'muted';
+    el.innerHTML = esc(out.warnings.length ? 'Note: ' + out.warnings.join('; ') + '.' : '') +
+      (lastMissing.length
+        ? ' <button type="button" class="btn btn-primary btn-sm" data-act="add-missing">Add the ' + lastMissing.length + ' missing vendor' + (lastMissing.length === 1 ? '' : 's') + '</button>' +
+          (savedDoc ? ' <a href="#/reports/vendors">or open the Vendor List</a>' : '')
+        : '') +
+      (extra ? (out.warnings.length ? ' ' : '') + '<span class="muted">' + esc(extra) + '</span>' : '');
+  }
+
+  // A saved report was saved with the vendors' details of that day: rebuild it with what the Vendor List says now
+  // (only blanks are filled in), keeping the ticks.
+  function rebuildSaved(extra) {
+    var picks = Object.create(null);
+    report.sections.forEach(function (s) { picks[s.name] = s.pick; });
+    var out = buildStatement(savedDoc.input);
+    out.report.sections.forEach(function (s) { s.pick = picks[s.name] !== false; });
+    out.report.input = savedDoc.input;
+    report = out.report;
+    showWarnings(out, extra);
+    renderReport();
+  }
+
+  // A form with one row per missing vendor: Type, Commission %, Email, CC. Saved straight into the Vendor List.
+  function openMissingDialog() {
+    if (!lastMissing.length) return;
+    var existing = Object.create(null);
+    P.reports.vendors.all().forEach(function (v) { existing[H.vendorKey(v.name)] = v; });
+
+    var dlg = document.createElement('dialog');
+    dlg.className = 'ms-missing';
+    dlg.innerHTML =
+      '<form method="dialog" novalidate>' +
+        '<h3>Add the missing vendors</h3>' +
+        '<p class="muted">These vendors are in the file but have no Type or Commission % in the Vendor List. Fill in what you know and press <b>Save vendors</b>; ' +
+          'they are added to the Vendor List and this report is updated. Rows you leave empty are skipped.</p>' +
+        '<div class="ms-missing-body"><table><thead><tr><th>Vendor</th><th>Type</th><th>Commission %</th><th>Email (To)</th><th>CC</th></tr></thead><tbody>' +
+        lastMissing.map(function (name, i) {
+          return '<tr data-i="' + i + '"><td>' + esc(name) + '</td>' +
+            '<td><select data-plain data-f="type"><option value="">Select...</option><option value="restaurant">Restaurant</option><option value="mart">Mart</option></select></td>' +
+            '<td><input type="text" data-f="commission" inputmode="decimal" maxlength="8" placeholder="e.g. 12.5" autocomplete="off"></td>' +
+            '<td><input type="text" data-f="email" maxlength="400" placeholder="a@x.com, b@x.com" autocomplete="off"></td>' +
+            '<td><input type="text" data-f="cc" maxlength="400" autocomplete="off"></td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<p class="form-error" data-m="err"></p>' +
+        '<div class="dlg-actions">' +
+          '<button type="button" class="btn btn-ghost" data-m="cancel">Cancel</button>' +
+          '<button type="button" class="btn btn-primary" data-m="save">Save vendors</button>' +
+        '</div>' +
+      '</form>';
+
+    // start from what the Vendor List already has for these vendors
+    lastMissing.forEach(function (name, i) {
+      var v = existing[H.vendorKey(name)], tr = dlg.querySelector('tr[data-i="' + i + '"]');
+      if (!v) return;
+      tr.querySelector('[data-f=type]').value = v.type;
+      tr.querySelector('[data-f=commission]').value = v.commission;
+      tr.querySelector('[data-f=email]').value = v.email;
+      tr.querySelector('[data-f=cc]').value = v.cc;
+    });
+
+    function close() { dlg.close(); dlg.remove(); }
+    dlg.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+    dlg.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-m]');
+      if (!b) return;
+      if (b.dataset.m === 'cancel') { close(); return; }
+      if (b.dataset.m !== 'save') return;
+
+      var items = [];
+      Array.prototype.forEach.call(dlg.querySelectorAll('tbody tr'), function (tr) {
+        function val(f) { return tr.querySelector('[data-f=' + f + ']').value.trim(); }
+        var it = { name: lastMissing[Number(tr.dataset.i)], type: val('type'), commission: val('commission'), email: val('email'), cc: val('cc') };
+        var v = existing[H.vendorKey(it.name)];
+        // skip a row that has nothing new: empty, or just what the Vendor List already holds
+        var changed = it.type !== (v ? v.type : '') || it.commission !== String(v ? v.commission : '') || it.email !== (v ? v.email : '') || it.cc !== (v ? v.cc : '');
+        if (changed && (it.type || it.commission || it.email || it.cc)) items.push(it);
+      });
+      if (!items.length) { dlg.querySelector('[data-m=err]').textContent = 'Fill in at least one vendor.'; return; }
+
+      var r = P.reports.vendors.upsert(items);
+      if (r.error) { dlg.querySelector('[data-m=err]').textContent = r.error; return; }
+      close();
+      vendorsChanged(r);
+    });
+
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    var first = dlg.querySelector('[data-f=type]');
+    if (first) first.focus();
+  }
+
+  // The Vendor List changed: bring the report up to date (a saved report is updated and saved too)
+  function vendorsChanged(r) {
+    var count = (r.added || 0) + (r.updated || 0);
+    if (!root || !report) return;
+    if (savedDoc) {
+      var n = P.reports.saved.refreshInfo(savedDoc);
+      rebuildSaved(n ? 'Saved report updated for ' + n + ' vendor' + (n === 1 ? '' : 's') + '.' : '');
+    } else {
+      generate();
+    }
+    P.toast(count + ' vendor' + (count === 1 ? '' : 's') + ' saved in the Vendor List. The report is updated.');
+  }
   // ---- saving ------------------------------------------------------------------------------------
   // Keep the report in Saved Reports, then show that list. The report is rebuilt first so what is saved is what is on screen.
   function saveReport() {
@@ -834,6 +950,7 @@
       case 'send-vendor': if (report && savedDoc) sendVendor(Number(b.dataset.section)); break;
       case 'send-group': if (report && savedDoc) sendGroup(b.dataset.id); break;
       case 'prepare-drafts': if (report && savedDoc) prepareDrafts(); break;
+      case 'add-missing': openMissingDialog(); break;
       case 'export-one':
         var s = report && report.sections[Number(b.dataset.section)];
         if (s) H.downloadCSV(statementFile(s.name, [s], 'csv'), sectionLines(s, false));
@@ -960,6 +1077,7 @@
         present: function () { return Object.create(null); }
       });
 
+      var filled = P.reports.saved.refreshInfo(doc);       // vendors added to the Vendor List since this was saved are filled in
       var out = buildStatement(doc.input);
       out.report.sections.forEach(function (s) { s.pick = !doc.picks || doc.picks[s.name] !== false; });
       out.report.input = doc.input;
@@ -970,7 +1088,7 @@
       $('#msSavedMeta').textContent = doc.input.source + ' \u00B7 ' + (doc.input.filterVendors ? doc.input.vendors.length : 1) + ' vendor' +
         ((doc.input.filterVendors ? doc.input.vendors.length : 1) === 1 ? '' : 's') + ' \u00B7 ' + orders + ' order' + (orders === 1 ? '' : 's') +
         ' \u00B7 saved ' + P.exporter.stamp(new Date(doc.savedAt)) + ' with the Type and Commission % as they were then';
-      say('#msMsg', out.warnings.length ? 'Note: ' + out.warnings.join('; ') + '.' : '', out.warnings.length > 0);
+      showWarnings(out, filled ? 'Updated ' + filled + ' vendor' + (filled === 1 ? '' : 's') + ' in this saved report from the Vendor List.' : '');
       renderReport();
       attach(container);
       P.reports.mail.prepare();                      // loads Google's sign-in (only when a client ID is set) so Send can use it at once
